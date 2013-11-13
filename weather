@@ -1,0 +1,454 @@
+#!/bin/bash
+#
+# Weather
+#
+# Spend a lot of time on the command line?  Want to know what it would feel
+# like to be outside?  If so then this is the script for you.
+#
+# Author(s): Cody Buell
+#
+# Revisions: 2013.10.17 Initial framework.
+#
+# Requisite: connection to the outside world via internet
+#
+# Resources: 
+#
+# Task List: argument for output format
+#            currently... line below location
+#            ascii renderings of conditions
+#            options to show output from other api's such as location
+#            geeklet mode option to have output format and custom error
+#              message when unable to determine location
+#            lat long in tanegashima shows a house address in france...
+#               http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.placefinder%20where%20text%3D%22131%2C30.6667%22%20and%20gflags%3D%22R%22&diagnostics=true
+
+#######################
+# Establish Variables #
+#######################
+
+# default location and units
+DEF_WOEID='2459115'
+DEF_UNITS='f'
+
+# dates
+if date -v 1d > /dev/null 2>&1; then    # detect date version in use
+  DVER="BSD"                            # set as bsd date
+  TODAY_0=`date +%a`
+  TODAY_1=`date -v+1d +%a`
+  TODAY_2=`date -v+2d +%a`
+  TODAY_3=`date -v+3d +%a`
+  TODAY_4=`date -v+4d +%a`
+else                                    # if it isn't bsd then...
+  DVER="GNU"                            # set as gnu date
+  TODAY_0=`date +%a`
+  TODAY_1=`date --date="1 day" +%a`
+  TODAY_2=`date --date="2 day" +%a`
+  TODAY_3=`date --date="3 day" +%a`
+  TODAY_4=`date --date="4 day" +%a`
+fi
+
+# weather icons
+SUNNY='\xe2\x98\x80\x0a'
+CLOUDY='\xe2\x98\x81'
+SNOWMAN='\xe2\x98\x83\x0a'
+THUNDER='\xe2\x98\x88\x0a'
+UMBRELLA='\xe2\x98\x82\x0a'
+LIGHTNING='\xe2\x98\x87\x0a'
+
+# symbols
+DEG='\xc2\xb0'
+#HIGH='\xe2\xa4\x92\x0a'
+HIGH='\xe2\x86\x91\x0a'
+#LOW='\xe2\xa4\x93\x0a'
+LOW='\xe2\x86\x93\x0a'
+SUNRISE='\xe2\x98\x80\x0a'
+SUNSET='\xe2\x98\xbc'
+
+# condition code icons
+ I_0='Tornado'
+ I_1='Tropical Storm'
+ I_2='Hurricane'
+ I_3='Sev Thndrstorms'
+ I_4='Thunderstorms'
+ I_5='Mxd Rain & Snow'
+ I_6='Mxd Rain & Sleet'
+ I_7='Mxd Snow & Sleet'
+ I_8='Freezing Drizzle'
+ I_9='Drizzle'
+I_10='Freezing Rain'
+I_11='Showers'
+I_12='Showers'
+I_13='Snow Flurries'
+I_14='Light Snow'
+I_15='Blowing Snow'
+I_16='Snow'
+I_17='Hail'
+I_18='Sleet'
+I_19='Dust'
+I_20='Foggy'
+I_21='Haze'
+I_22='Smoky'
+I_23='Blustery'
+I_24='Windy'
+I_25='Cold'
+I_26=$CLOUDY
+I_27=$CLOUDY              # night
+I_28=$CLOUDY              # day
+I_29=$CLOUDY              # night
+I_30=$CLOUDY              # day
+I_31='Clear'              # night
+I_32=$SUNNY
+I_33='Fair'               # night
+I_34='Fair'               # day
+I_35='Mxd Rain & Hail'
+I_36='Hot'
+I_37='Isltd Thndrstrms'
+I_38='Sctrd Thndrstrms'
+I_39='Sctrd Thndrstrms'
+I_40='Sctrd Showers'
+I_41='Heavy Snow'
+I_42='Scattered Snow'
+I_43='Heavy Snow'
+I_44='Partly Cloudy'
+I_45='Thundershowers'
+I_46='Snow Showers'
+I_47='Isltd Thndrshwrs'
+I_3200='Not Available'
+
+# condition code short text
+ C_0='Tornado'
+ C_1='Tropical Storm'
+ C_2='Hurricane'
+ C_3='Sev Thndrstorms'
+ C_4='Thunderstorms'
+ C_5='Mxd Rain & Snow'
+ C_6='Mxd Rain & Sleet'
+ C_7='Mxd Snow & Sleet'
+ C_8='Freezing Drizzle'
+ C_9='Drizzle'
+C_10='Freezing Rain'
+C_11='Showers'
+C_12='Showers'
+C_13='Snow Flurries'
+C_14='Light Snow'
+C_15='Blowing Snow'
+C_16='Snow'
+C_17='Hail'
+C_18='Sleet'
+C_19='Dust'
+C_20='Foggy'
+C_21='Haze'
+C_22='Smoky'
+C_23='Blustery'
+C_24='Windy'
+C_25='Cold'
+C_26='Cloudy'
+C_27='Mostly Cloudy'      # night
+C_28='Mostly Cloudy'      # day
+C_29='Partly Cloudy'      # night
+C_30='Partly Cloudy'      # day
+C_31='Clear'              # night
+C_32='Sunny'
+C_33='Fair'               # night
+C_34='Fair'               # day
+C_35='Mxd Rain & Hail'
+C_36='Hot'
+C_37='Isltd Thndrstrms'
+C_38='Sctrd Thndrstrms'
+C_39='Sctrd Thndrstrms'
+C_40='Sctrd Showers'
+C_41='Heavy Snow'
+C_42='Scattered Snow'
+C_43='Heavy Snow'
+C_44='Partly Cloudy'
+C_45='Thundershowers'
+C_46='Snow Showers'
+C_47='Isltd Thndrshwrs'
+C_3200='Not Available'
+
+# 'currently' condition code (long text)
+ C_0='Tornado'
+ C_1='Tropical Storm'
+ C_2='Hurricane'
+ C_3='Sev Thndrstorms'
+ C_4='Thunderstorms'
+ C_5='Mxd Rain & Snow'
+ C_6='Mxd Rain & Sleet'
+ C_7='Mxd Snow & Sleet'
+ C_8='Freezing Drizzle'
+ C_9='Drizzle'
+C_10='Freezing Rain'
+C_11='Showers'
+C_12='Showers'
+C_13='Snow Flurries'
+C_14='Light Snow'
+C_15='Blowing Snow'
+C_16='Snow'
+C_17='Hail'
+C_18='Sleet'
+C_19='Dust'
+C_20='Foggy'
+C_21='Haze'
+C_22='Smoky'
+C_23='Blustery'
+C_24='Windy'
+C_25='Cold'
+C_26='Cloudy'
+C_27='Mostly Cloudy'      # night
+C_28='Mostly Cloudy'      # day
+C_29='Partly Cloudy'      # night
+C_30='Partly Cloudy'      # day
+C_31='Clear'              # night
+C_32='Sunny'
+C_33='Fair'               # night
+C_34='Fair'               # day
+C_35='Mxd Rain & Hail'
+C_36='Hot'
+C_37='Isltd Thndrstrms'
+C_38='Sctrd Thndrstrms'
+C_39='Sctrd Thndrstrms'
+C_40='Sctrd Showers'
+C_41='Heavy Snow'
+C_42='Scattered Snow'
+C_43='Heavy Snow'
+C_44='Partly Cloudy'
+C_45='Thundershowers'
+C_46='Snow Showers'
+C_47='Isltd Thndrshwrs'
+C_3200='Not Available'
+
+################
+# Define Usage #
+################
+
+usage() {
+  cat <<-ENDOFUSAGE
+	usage: $(basename $0) [-u c|f] [-w id] [-n name]
+
+	  -h, --help           Display usage information.
+	  -u, --units [c|f]    Set units to celsius or fahrenheit.
+	  -w, --woeid [id]     Set location by where on earth id (WOEID).
+	  -n, --name  [name]   Set location by place name.
+
+	ENDOFUSAGE
+}
+
+######################
+# Define Subroutines #
+######################
+
+urlencode() {                                                                   
+  # urlencode <string>                                                        
+  local length="${#1}"                                                        
+  for (( i = 0 ; i < length ; i++ )); do                                      
+    local c="${1:i:1}"                                                      
+    case "$c" in                                                            
+      [a-zA-Z0-9.~_-]) printf "$c" ;;                                     
+      ' ') printf + ;;                                                    
+      *) printf '%%%X' "'$c"                                              
+    esac                                                                    
+  done                                                                        
+}                                                                             
+                                                                                
+urldecode() {                                                                   
+  # urldecode <string>                                                        
+  local url_encoded=${1//+/ }                                                 
+  printf '%b' "${url_encoded//%/\x}"                                          
+}
+
+detect_location() {
+  # query the api
+  RES=`curl --connect-timeout 10 --max-time 10 -sL -w http_code http://api.hostip.info/get_html.php?position=true`
+
+  # set location information
+  CUR_IP_ADDR=`echo -n "$RES" | grep '^IP' | sed 's/IP: //'`
+  CUR_COUNTRY=`echo -n "$RES" | grep '^Country' | sed 's/Country: //'`
+  CUR_CITY=`   echo -n "$RES" | grep '^City' | sed 's/City: //'`
+  CUR_LONG=`   echo -n "$RES" | grep '^Longitude' | sed 's/Longitude: //'`
+  CUR_LAT=`    echo -n "$RES" | grep '^Latitude' | sed 's/Latitude: //'`
+}
+
+query_woeid_api() {
+  # by lat long
+  #URL_LATLON=`urlencode "$CUR_LAT,$CUR_LONG"`
+
+  # by place name
+  URL_LATLON=`urlencode "$CUR_CITY, $CUR_COUNTRY"`
+
+  XML=`curl --connect-timeout 10 --max-time 10 -sL -w http_code http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.placefinder%20where%20text%3D%22$URL_LATLON%22%20and%20gflags%3D%22R%22&diagnostics=true`
+
+  # by place name
+  [[ ! -z "$NAME" ]] && {
+    URL_PLACENAME=`urlencode "$NAME"`
+    XML=`curl --connect-timeout 10 --max-time 10 -sL -w http_code http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.placefinder%20where%20text%3D%22$URL_PLACENAME%22&diagnostics=true`
+  }
+
+  DEF_WOEID=`echo -n "$XML" | grep woeid | sed 's/^.*<woeid>//;s/<\/woeid>.*$//'`
+}
+
+query_weather_api() {
+
+  if [[ -z "$DEF_WOEID" ]] && [[ -z "$WOEID" ]]; then
+    echo "error: could not automatically determine location, use -n [location]"
+    usage
+    exit
+  fi
+
+  # query the api
+  XML=`curl --connect-timeout 10 --max-time 10 -sL -w http_code http://weather.yahooapis.com/forecastrss?w=${WOEID:-$DEF_WOEID}&u=${UNITS:-$DEF_UNITS}`
+
+  # clean up the rsponse
+  XML=`echo -n "$XML" | sed '/^[[:space:]]*$/d;s/^[[:space:]]*//'`
+
+  # establish location
+  CITY=`   echo -n "$XML" | grep yweather:location | sed 's/^.*city="//;s/".*$//'`
+  REGION=` echo -n "$XML" | grep yweather:location | sed 's/^.*region="//;s/".*$//'`
+  COUNTRY=`echo -n "$XML" | grep yweather:location | sed 's/^.*country="//;s/".*$//'`
+
+  LAT=`echo -n "$XML" | grep geo:lat  | sed 's/<geo:lat>//;s/<\/geo:lat>//'`
+  LON=`echo -n "$XML" | grep geo:long | sed 's/<geo:long>//;s/<\/geo:long>//'`
+
+  # establish units
+  U_TEMP=` echo -n "$XML" | grep yweather:units | sed 's/^.*temperature="//;s/".*$//'`
+  U_DIST=` echo -n "$XML" | grep yweather:units | sed 's/^.*distance="//;s/".*$//'`
+  U_PRES=` echo -n "$XML" | grep yweather:units | sed 's/^.*pressure="//;s/".*$//'`
+  U_SPEED=`echo -n "$XML" | grep yweather:units | sed 's/^.*speed="//;s/".*$//'`
+
+  # current wind conditions
+  C_WIND_CHILL=`echo -n "$XML" | grep yweather:wind | sed 's/^.*speed="//;s/".*$//'`
+  C_WIND_DIR=`  echo -n "$XML" | grep yweather:wind | sed 's/^.*direction="//;s/".*$//'`
+  C_WIND_SPEED=`echo -n "$XML" | grep yweather:wind | sed 's/^.*speed="//;s/".*$//'`
+
+  # current atmosphere conditions
+  C_ATMS_HUM=` echo -n "$XML" | grep yweather:atmosphere | sed 's/^.*humidity="//;s/".*$//'`
+  C_ATMS_VIS=` echo -n "$XML" | grep yweather:atmosphere | sed 's/^.*visibility="//;s/".*$//;s/\(^.*\..\).*$/\1/'`
+  C_ATMS_PRES=`echo -n "$XML" | grep yweather:atmosphere | sed 's/^.*pressure="//;s/".*$//'`
+  C_ATMS_RISE=`echo -n "$XML" | grep yweather:atmosphere | sed 's/^.*rising="//;s/".*$//'`
+
+  # current astronomy
+  C_AST_RISE=`echo -n "$XML" | grep yweather:astronomy | sed 's/^.*sunrise="//;s/".*$//'`
+  C_AST_SET=` echo -n "$XML" | grep yweather:astronomy | sed 's/^.*sunset="//;s/".*$//'`
+
+  # current conditions
+  C_COND_TXT=` echo -n "$XML" | grep yweather:condition | sed 's/^.*text="//;s/".*$//'`
+  C_COND_CODE=`echo -n "$XML" | grep yweather:condition | sed 's/^.*code="//;s/".*$//'`
+  C_COND_TEMP=`echo -n "$XML" | grep yweather:condition | sed 's/^.*temp="//;s/".*$//'`
+  C_COND_ABRV=$(eval "echo \$$(echo C_${C_COND_CODE})")
+  C_COND_ICON=$(eval "echo \$$(echo I_${C_COND_CODE})")
+
+  # forecast today
+  D0_DAY=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_0\"" | sed 's/^.*day="//;s/".*$//'`
+  D0_DATE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_0\"" | sed 's/^.*date="//;s/".*$//'`
+  D0_LOW=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_0\"" | sed 's/^.*low="//;s/".*$//'`
+  D0_HIGH=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_0\"" | sed 's/^.*high="//;s/".*$//'`
+  D0_TEXT=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_0\"" | sed 's/^.*text="//;s/".*$//'`
+  D0_CODE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_0\"" | sed 's/^.*code="//;s/".*$//'`
+  D0_ABRV=$(eval "echo \$$(echo C_${D0_CODE})")
+
+  # forecast +1 day
+  D1_DAY=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_1\"" | sed 's/^.*day="//;s/".*$//'`
+  D1_DATE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_1\"" | sed 's/^.*date="//;s/".*$//'`
+  D1_LOW=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_1\"" | sed 's/^.*low="//;s/".*$//'`
+  D1_HIGH=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_1\"" | sed 's/^.*high="//;s/".*$//'`
+  D1_TEXT=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_1\"" | sed 's/^.*text="//;s/".*$//'`
+  D1_CODE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_1\"" | sed 's/^.*code="//;s/".*$//'`
+  D1_ABRV=$(eval "echo \$$(echo C_${D1_CODE})")
+
+  # forecast +2 day
+  D2_DAY=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_2\"" | sed 's/^.*day="//;s/".*$//'`
+  D2_DATE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_2\"" | sed 's/^.*date="//;s/".*$//'`
+  D2_LOW=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_2\"" | sed 's/^.*low="//;s/".*$//'`
+  D2_HIGH=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_2\"" | sed 's/^.*high="//;s/".*$//'`
+  D2_TEXT=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_2\"" | sed 's/^.*text="//;s/".*$//'`
+  D2_CODE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_2\"" | sed 's/^.*code="//;s/".*$//'`
+  D2_ABRV=$(eval "echo \$$(echo C_${D2_CODE})")
+
+  # forecast +3 day
+  D3_DAY=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_3\"" | sed 's/^.*day="//;s/".*$//'`
+  D3_DATE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_3\"" | sed 's/^.*date="//;s/".*$//'`
+  D3_LOW=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_3\"" | sed 's/^.*low="//;s/".*$//'`
+  D3_HIGH=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_3\"" | sed 's/^.*high="//;s/".*$//'`
+  D3_TEXT=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_3\"" | sed 's/^.*text="//;s/".*$//'`
+  D3_CODE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_3\"" | sed 's/^.*code="//;s/".*$//'`
+  D3_ABRV=$(eval "echo \$$(echo C_${D3_CODE})")
+
+  # forecast +4 day
+  D4_DAY=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_4\"" | sed 's/^.*day="//;s/".*$//'`
+  D4_DATE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_4\"" | sed 's/^.*date="//;s/".*$//'`
+  D4_LOW=` echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_4\"" | sed 's/^.*low="//;s/".*$//'`
+  D4_HIGH=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_4\"" | sed 's/^.*high="//;s/".*$//'`
+  D4_TEXT=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_4\"" | sed 's/^.*text="//;s/".*$//'`
+  D4_CODE=`echo -n "$XML" | grep "yweather:forecast day=\"$TODAY_4\"" | sed 's/^.*code="//;s/".*$//'`
+  D4_ABRV=$(eval "echo \$$(echo C_${D4_CODE})")
+}
+
+geeklet() {
+  echo ""
+  echo "${CITY}, ${REGION}`if [ ! -z ${REGION} ]; then echo ', '; fi`${COUNTRY}"
+# echo "Currently 
+  echo "---------------------------------"
+  echo "${C_COND_TEMP}$(echo -e $DEG)${U_TEMP} ${C_ATMS_HUM}% ${C_WIND_SPEED}${U_SPEED} rise: ${C_AST_RISE}"   | awk '{printf "%-6s %4s %7s %6s %7s\n",$1,$2,$3,$4,$5$6}'
+  echo "H${D0_HIGH:---}$(echo -e $DEG) L${D0_LOW:---}$(echo -e $DEG) ${C_ATMS_VIS}${U_DIST} set: ${C_AST_SET}" | awk '{printf "%-6s %6s %6s %6s %7s\n",$1,$2,$3,$4,$5$6}'
+  echo "---------------------------------"
+  echo "${D1_DAY:----}: $(echo -e $HIGH)${D1_HIGH:---}$(echo -e $DEG) $(echo -e $LOW)${D1_LOW:---}$(echo -e $DEG) ${D1_ABRV:----}" | awk '{printf "%-4s %-8s %-8s %-16s\n",$1,$2,$3,$4" "$5" "$6" "$7" "$8}'
+  echo "${D2_DAY:----}: $(echo -e $HIGH)${D2_HIGH:---}$(echo -e $DEG) $(echo -e $LOW)${D2_LOW:---}$(echo -e $DEG) ${D2_ABRV:----}" | awk '{printf "%-4s %-8s %-8s %-16s\n",$1,$2,$3,$4" "$5" "$6" "$7" "$8}'
+  echo "${D3_DAY:----}: $(echo -e $HIGH)${D3_HIGH:---}$(echo -e $DEG) $(echo -e $LOW)${D3_LOW:---}$(echo -e $DEG) ${D3_ABRV:----}" | awk '{printf "%-4s %-8s %-8s %-16s\n",$1,$2,$3,$4" "$5" "$6" "$7" "$8}'
+  echo "${D4_DAY:----}: $(echo -e $HIGH)${D4_HIGH:---}$(echo -e $DEG) $(echo -e $LOW)${D4_LOW:---}$(echo -e $DEG) ${D4_ABRV:----}" | awk '{printf "%-4s %-8s %-8s %-16s\n",$1,$2,$3,$4" "$5" "$6" "$7" "$8}'
+  echo ""
+}
+
+################
+# Long Options #
+################
+
+[ x"$1" = x"--help" ] && {
+  usage
+  exit
+}
+
+[ x"$1" = x"--woeid" ] && {
+  WOEID=$2
+}
+
+[ x"$1" = x"--units" ] && {
+  UNITS=$2
+}
+
+[ x"$1" = x"--name" ] && {
+  NAME=$2
+}
+
+#################
+# Short Options #
+#################
+
+while getopts ":hw:u:n:" Option; do
+  case $Option in
+    h ) 
+      usage
+      exit
+      ;;  
+    w ) 
+      WOEID=$OPTARG
+      ;;  
+    u ) 
+      UNITS=$OPTARG
+      ;;  
+    n ) 
+      NAME=$OPTARG
+      ;;  
+    : ) 
+      echo "Option -$OPTARG requires an argument." >&2
+      exit
+      ;;
+  esac
+done
+
+##########
+# Run It #
+##########
+
+detect_location
+query_woeid_api
+query_weather_api
+geeklet
