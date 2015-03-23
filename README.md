@@ -47,4 +47,4 @@ Locations cannot always be determined by [hostip.info](http://www.hostip.info/).
 License
 -------
 
-MIT is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT).
+Weather is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT).
