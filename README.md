@@ -1,6 +1,9 @@
 Weather
 =======
 
+![Version](https://img.shields.io/badge/version-1.0-green.svg)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](http://opensource.org/licenses/MIT)
+
 Overview
 --------
 
@@ -40,3 +43,8 @@ Gotchas
 -------
 
 Locations cannot always be determined by [hostip.info](http://www.hostip.info/).  If this is the case for your IP, you can visit [hostip.info](http://www.hostip.info/), click on the link that says "Make a correction" and add your location.
+
+License
+-------
+
+MIT is open-sourced software licensed under the [MIT license](http://opensource.org/licenses/MIT).
